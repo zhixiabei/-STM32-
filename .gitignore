@@ -1,0 +1,39 @@
+# ==================== Keil MDK 编译产物 ====================
+**/Objects/
+**/Listings/
+*.axf
+*.elf
+*.hex
+*.uvgui*
+*.dep
+*.crf
+*.o
+*.d
+*.lnp
+*.scvd
+*.dbgconf
+*.build_log.htm
+*.map
+*.lst
+
+# ==================== 立创EDA原理图/PCB缓存 ====================
+.lceda/cache/
+autosave/
+*.tmp
+*.bak
+
+# ==================== Altium Designer ====================
+History/
+Project Logs/
+__Previews/
+*.SchPreview
+*.PcbPreview
+
+# ==================== BOM、文档临时文件 ====================
+~$*.xlsx
+*.tmp.csv
+*.tmp.pdf
+
+# ==================== 系统垃圾文件 ====================
+.DS_Store
+Thumbs.db
