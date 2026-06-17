@@ -10,9 +10,9 @@ const char* WIFI_SSID     = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
 /* OneNET Studio MQTT */
-const char* ProductID  = "YOUR_PRODUCT_ID";     // 产品 ID
-const char* DeviceName = "YOUR_DEVICE_NAME";           // 设备名称
-const char* DeviceKey  = "YOUR_DEVICE_KEY";  // 设备密钥
+const char* ProductID  = "YOUR_PRODUCT_ID";      // 产品 ID
+const char* DeviceName = "YOUR_DEVICE_NAME";     // 设备名称
+const char* DeviceKey  = "YOUR_DEVICE_KEY";      // 设备密钥
 
 /* MQTT 服务器（不用改） */
 const char* MQTT_BROKER = "mqtts.heclouds.com";
