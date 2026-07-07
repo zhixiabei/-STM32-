@@ -108,11 +108,12 @@
  #define SYSCLK_FREQ_24MHz  24000000
 #else
 /* #define SYSCLK_FREQ_HSE    HSE_VALUE */
-/* #define SYSCLK_FREQ_24MHz  24000000 */ 
+/* #define SYSCLK_FREQ_24MHz  24000000 */
 /* #define SYSCLK_FREQ_36MHz  36000000 */
 /* #define SYSCLK_FREQ_48MHz  48000000 */
 /* #define SYSCLK_FREQ_56MHz  56000000 */
-#define SYSCLK_FREQ_72MHz  72000000
+/* #define SYSCLK_FREQ_72MHz  72000000 */  // 需要外部晶振正常起振
+//#define SYSCLK_FREQ_64MHz  64000000       // HSI+PLL=64MHz，不依赖外部晶振
 #endif
 
 /*!< Uncomment the following line if you need to use external SRAM mounted
@@ -160,6 +161,8 @@
   uint32_t SystemCoreClock         = SYSCLK_FREQ_56MHz;        /*!< System Clock Frequency (Core Clock) */
 #elif defined SYSCLK_FREQ_72MHz
   uint32_t SystemCoreClock         = SYSCLK_FREQ_72MHz;        /*!< System Clock Frequency (Core Clock) */
+#elif defined SYSCLK_FREQ_64MHz
+  uint32_t SystemCoreClock         = SYSCLK_FREQ_64MHz;        /*!< System Clock Frequency (Core Clock) */
 #else /*!< HSI Selected as System Clock source */
   uint32_t SystemCoreClock         = HSI_VALUE;        /*!< System Clock Frequency (Core Clock) */
 #endif
@@ -187,6 +190,8 @@ static void SetSysClock(void);
   static void SetSysClockTo56(void);  
 #elif defined SYSCLK_FREQ_72MHz
   static void SetSysClockTo72(void);
+#elif defined SYSCLK_FREQ_64MHz
+  static void SetSysClockTo64(void);
 #endif
 
 #ifdef DATA_IN_ExtSRAM
@@ -430,6 +435,8 @@ static void SetSysClock(void)
   SetSysClockTo56();  
 #elif defined SYSCLK_FREQ_72MHz
   SetSysClockTo72();
+#elif defined SYSCLK_FREQ_64MHz
+  SetSysClockTo64();
 #endif
  
  /* If none of the define above is enabled, the HSI is used as System clock
@@ -1074,7 +1081,85 @@ static void SetSysClockTo72(void)
     }
   }
   else
-  { /* If HSE fails to start-up, the application will have wrong clock 
+  { /* If HSE fails to start-up, the application will have wrong clock
+         configuration. User can add here some code to deal with this error */
+  }
+}
+}
+#elif defined SYSCLK_FREQ_64MHz
+/**
+  * @brief  Sets System clock frequency to 64MHz using HSI+PLL (no HSE needed).
+  *         HSI=8MHz -> /2 -> *16 = 64MHz
+  * @note   This function should be used only after reset.
+  * @param  None
+  * @retval None
+  */
+static void SetSysClockTo64(void)
+{
+  __IO uint32_t StartUpCounter = 0, HSIStatus = 0;
+
+  /* SYSCLK, HCLK, PCLK2 and PCLK1 configuration ---------------------------*/
+  /* Enable HSI */
+  RCC->CR |= ((uint32_t)RCC_CR_HSION);
+
+  /* Wait till HSI is ready and if Time out is reached exit */
+  do
+  {
+    HSIStatus = RCC->CR & RCC_CR_HSIRDY;
+    StartUpCounter++;
+  } while((HSIStatus == 0) && (StartUpCounter != HSE_STARTUP_TIMEOUT));
+
+  if ((RCC->CR & RCC_CR_HSIRDY) != RESET)
+  {
+    HSIStatus = (uint32_t)0x01;
+  }
+  else
+  {
+    HSIStatus = (uint32_t)0x00;
+  }
+
+  if (HSIStatus == (uint32_t)0x01)
+  {
+    /* Enable Prefetch Buffer */
+    FLASH->ACR |= FLASH_ACR_PRFTBE;
+
+    /* Flash 2 wait state (required for >48MHz) */
+    FLASH->ACR &= (uint32_t)((uint32_t)~FLASH_ACR_LATENCY);
+    FLASH->ACR |= (uint32_t)FLASH_ACR_LATENCY_2;
+
+    /* HCLK = SYSCLK */
+    RCC->CFGR |= (uint32_t)RCC_CFGR_HPRE_DIV1;
+
+    /* PCLK2 = HCLK */
+    RCC->CFGR |= (uint32_t)RCC_CFGR_PPRE2_DIV1;
+
+    /* PCLK1 = HCLK / 2 (max 36MHz for APB1) */
+    RCC->CFGR |= (uint32_t)RCC_CFGR_PPRE1_DIV2;
+
+    /* PLL: HSI/2 * 16 = 64 MHz */
+    RCC->CFGR &= (uint32_t)((uint32_t)~(RCC_CFGR_PLLSRC | RCC_CFGR_PLLXTPRE |
+                                        RCC_CFGR_PLLMULL));
+    RCC->CFGR |= (uint32_t)(RCC_CFGR_PLLMULL16);
+
+    /* Enable PLL */
+    RCC->CR |= RCC_CR_PLLON;
+
+    /* Wait till PLL is ready */
+    while((RCC->CR & RCC_CR_PLLRDY) == 0)
+    {
+    }
+
+    /* Select PLL as system clock source */
+    RCC->CFGR &= (uint32_t)((uint32_t)~(RCC_CFGR_SW));
+    RCC->CFGR |= (uint32_t)RCC_CFGR_SW_PLL;
+
+    /* Wait till PLL is used as system clock source */
+    while ((RCC->CFGR & (uint32_t)RCC_CFGR_SWS) != (uint32_t)0x08)
+    {
+    }
+  }
+  else
+  { /* If HSI fails to start-up, the application will have wrong clock
          configuration. User can add here some code to deal with this error */
   }
 }

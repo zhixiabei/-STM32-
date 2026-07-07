@@ -39,8 +39,8 @@ void OLED_DisplayTurn(u8 i)
 //延时
 void IIC_delay(void)
 {
-	u8 t=3;
-	while(t--);
+	volatile u8 t = 8;    // 开漏模式，延时加长保证信号稳定
+	while (t--) { __NOP(); }
 }
 
 //起始信号
@@ -550,17 +550,19 @@ void OLED_Init(void)
 {
 	GPIO_InitTypeDef  GPIO_InitStructure;
  	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);	 //使能A端口时钟
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8|GPIO_Pin_9;	 
- 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_OD; 		 //推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;//速度50MHz
- 	GPIO_Init(GPIOB, &GPIO_InitStructure);	  //初始化PA0,1
- 	GPIO_SetBits(GPIOB,GPIO_Pin_8|GPIO_Pin_9);
+	/* PB9=SCL 推挽（主机始终驱动时钟） */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_SetBits(GPIOB, GPIO_Pin_9);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;	 
- 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP; 		 //推挽输出
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;//速度50MHz
- 	GPIO_Init(GPIOB, &GPIO_InitStructure);	  //初始化PA2
- 	GPIO_SetBits(GPIOB,GPIO_Pin_9);
+	/* PB8=SDA 开漏（从机应答时需要拉低总线） */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_OD;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_SetBits(GPIOB, GPIO_Pin_8);
 	
 	Delay_ms(200);
 	
@@ -591,5 +593,6 @@ void OLED_Init(void)
 	OLED_WR_Byte(0x14,OLED_CMD);//--set(0x10) disable
 	OLED_Clear();
 	OLED_WR_Byte(0xAF,OLED_CMD);
+	OLED_WR_Byte(0xA4,OLED_CMD);  // 正常显示（显示RAM内容）
 }
 

@@ -4,18 +4,18 @@
 #include "stm32f10x.h"                  // Device header
 #include "stdlib.h"	
 
-//-----------------OLED¶Ë¿Ú¶¨Òå---------------- 
+//-----------------OLEDï¿½Ë¿Ú¶ï¿½ï¿½ï¿½---------------- 
 
-#define OLED_SCL_Clr() GPIO_ResetBits(GPIOB,GPIO_Pin_8)//SCL
-#define OLED_SCL_Set() GPIO_SetBits(GPIOB,GPIO_Pin_8)
+#define OLED_SCL_Clr() GPIO_ResetBits(GPIOB,GPIO_Pin_9)//SCL
+#define OLED_SCL_Set() GPIO_SetBits(GPIOB,GPIO_Pin_9)
 
-#define OLED_SDA_Clr() GPIO_ResetBits(GPIOB,GPIO_Pin_9)//DIN
-#define OLED_SDA_Set() GPIO_SetBits(GPIOB,GPIO_Pin_9)
+#define OLED_SDA_Clr() GPIO_ResetBits(GPIOB,GPIO_Pin_8)//DIN
+#define OLED_SDA_Set() GPIO_SetBits(GPIOB,GPIO_Pin_8)
 
 
 
-#define OLED_CMD  0	//Ð´ÃüÁî
-#define OLED_DATA 1	//Ð´Êý¾Ý
+#define OLED_CMD  0	//Ð´ï¿½ï¿½ï¿½ï¿½
+#define OLED_DATA 1	//Ð´ï¿½ï¿½ï¿½ï¿½
 
 void OLED_ClearPoint(u8 x,u8 y);
 void OLED_ColorTurn(u8 i);
