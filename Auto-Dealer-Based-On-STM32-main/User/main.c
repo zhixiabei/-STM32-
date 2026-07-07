@@ -122,7 +122,7 @@ int main(void)
             for (i = 0; i < 8; i++)
                 for (n = 0; n < 128; n++)
                     OLED_GRAM[n][i] = 0;
-            DHT11_Read_data((u8*)&temp, (u8*)&humi, &dechumi, &dectemp);
+            DHT11_Read_data((u8*)&humi, (u8*)&temp, &dechumi, &dectemp);
             OLED_ShowChinese(20,16,16,16,1);
             OLED_ShowChinese(36,16,17,16,1);
             OLED_ShowChinese(52,16,18,16,1);

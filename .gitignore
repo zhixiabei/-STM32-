@@ -34,6 +34,11 @@ __Previews/
 *.tmp.csv
 *.tmp.pdf
 
+# ==================== Claude Code ====================
+.claude/
+build.log
+build_output.txt
+
 # ==================== 系统垃圾文件 ====================
 .DS_Store
 Thumbs.db
