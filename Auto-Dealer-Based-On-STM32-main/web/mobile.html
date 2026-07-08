@@ -269,17 +269,21 @@
   <button class="btn-save" onclick="saveConfig()">💾 保存并重连</button>
 </div>
 
+<!-- 凭据（secret.js 不提交 Git；缺失则手动在 ⚙ 配置） -->
+<script src="secret.js"></script>
 <!-- Paho MQTT -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
 <script>
 // ======================== 配置 ========================
-const DEFAULT_CONFIG = {
-  broker:    'wss://mqtts.heclouds.com:8083/mqtt',
-  productId: 'gtx9E8EU09',
-  deviceName:'dev1',
-  password:  'version=2018-10-31&res=products%2Fgtx9E8EU09%2Fdevices%2Fdev1&et=4102444800&method=md5&sign=Qfm%2BF0XgHEOPKYUYhFWIkA%3D%3D',
-};
+const DEFAULT_CONFIG = (typeof VENDING_SECRETS !== 'undefined')
+  ? { ...VENDING_SECRETS }
+  : {
+      broker:    'wss://mqtts.heclouds.com:8083/mqtt',
+      productId: 'YOUR_PRODUCT_ID',
+      deviceName:'YOUR_DEVICE_NAME',
+      password:  'YOUR_MQTT_PASSWORD_TOKEN',
+    };
 
 function getConfig() {
   try {

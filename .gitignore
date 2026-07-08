@@ -39,6 +39,10 @@ __Previews/
 build.log
 build_output.txt
 
+# ==================== 密钥文件（禁止提交） ====================
+**/secret.h
+**/secret.js
+
 # ==================== 系统垃圾文件 ====================
 .DS_Store
 Thumbs.db

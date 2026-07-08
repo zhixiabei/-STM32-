@@ -2,8 +2,11 @@
 #include <string.h>
 #include <stdio.h>
 #include "Serial.h"
+#include "secret.h"       /* WiFi + MQTT 凭据（不提交到 Git） */
 extern volatile int pRxPacket;
 
+/* ---- WiFi + MQTT 凭据（定义在 secret.h）---- */
+/* WIFI_SSID / WIFI_PASSWORD / PRODUCT_ID / DEVICE_NAME / MQTT_PASS */
 /* ---- MQTT 命令接收缓冲区（独立于 Serial_RxPacket，不会被上传操作清空）---- */
 #define CMD_BUF_SIZE  512
 char  MqttRxBuf[CMD_BUF_SIZE];
@@ -14,18 +17,14 @@ static void NopDelayMs(volatile u32 ms)
     while (ms--) { volatile u32 n = 2000; while (n--) __NOP(); }
 }
 
-const char* WIFI_SSID     = "IQOO12";
-const char* WIFI_PASSWORD = "zuoxiaobo1126";
+const char* WIFI_SSID     = WIFI_SSID;
+const char* WIFI_PASSWORD = WIFI_PASSWORD;
 
 const char* MQTT_BROKER = "mqtts.heclouds.com";
 const int   MQTT_PORT   = 8883;
-const char* PRODUCT_ID  = "gtx9E8EU09";
-const char* DEVICE_NAME = "dev1";
-const char* MQTT_PASS   = "version=2018-10-31"
-    "&res=products%2Fgtx9E8EU09%2Fdevices%2Fdev1"
-    "&et=4102444800"
-    "&method=md5"
-    "&sign=Qfm%2BF0XgHEOPKYUYhFWIkA%3D%3D";
+const char* PRODUCT_ID  = ONENET_PRODUCT_ID;
+const char* DEVICE_NAME = ONENET_DEVICE_NAME;
+const char* MQTT_PASS   = ONENET_MQTT_PASS;
 
 static char Topic_DataUp[128];
 static char Topic_CmdDown[128];       /* 订阅：接收云端命令 */
