@@ -154,6 +154,11 @@ int main(void)
                     LED_UpdateAll(inventory);   /* 云端改库存后刷新 LED */
                     save_inventory();           /* 持久化到 Flash */
                 }
+                /* OneNET 属性设置: {"params":{"Banana":10}} */
+                else if (ESP8266_HandlePropertySet(inventory)) {
+                    LED_UpdateAll(inventory);
+                    save_inventory();
+                }
             }
         }
 

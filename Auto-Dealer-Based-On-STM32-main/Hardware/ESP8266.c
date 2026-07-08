@@ -524,6 +524,66 @@ void ESP8266_ClearPendingSvc(void)
     SvcSlot     = -1;
 }
 
+/* ---- OneNET 属性设置处理与回复 ---- */
+int8_t ESP8266_HandlePropertySet(u8 *inventory)
+{
+    static char Topic_PropSetReply[128] = "";
+    char id_buf[64];
+    int any_found = 0;
+    int i;
+
+    /* 仅处理属性设置 topic */
+    if (!strstr((const char*)MqttTopicBuf, "thing/property/set"))
+        return 0;
+
+    /* 提取消息 id */
+    extract_msg_id((const char*)MqttRxBuf, id_buf, sizeof(id_buf));
+
+    /* 解析 "Apple"/"Banana"/"Orange"/"Mango" 的值 */
+    {
+        const char *names[] = {"Apple", "Banana", "Orange", "Mango"};
+        int indices[] = {0, 2, 4, 6};
+        for (i = 0; i < 4; i++) {
+            char key[16];
+            const char *pos;
+            sprintf(key, "\"%s\"", names[i]);
+            pos = strstr((const char*)MqttRxBuf, key);
+            if (pos) {
+                pos += strlen(key);
+                while (*pos == ' ' || *pos == ':' || *pos == '\t') pos++;
+                if (*pos >= '0' && *pos <= '9') {
+                    int val = 0;
+                    while (*pos >= '0' && *pos <= '9') {
+                        val = val * 10 + (*pos - '0');
+                        pos++;
+                    }
+                    if (val >= 0 && val <= 99) {
+                        inventory[indices[i]] = (u8)val;
+                        any_found = 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /* 回复 OneNET */
+    if (id_buf[0] != '\0') {
+        char reply[256];
+        if (Topic_PropSetReply[0] == '\0') {
+            sprintf(Topic_PropSetReply, "$sys/%s/%s/thing/property/set_reply",
+                    PRODUCT_ID, DEVICE_NAME);
+        }
+        sprintf(reply, "{\"id\":\"%s\",\"code\":0,\"msg\":\"success\"}", id_buf);
+        mqtt_publish(Topic_PropSetReply, reply);
+    }
+
+    /* 清除缓冲区 */
+    memset(MqttRxBuf, 0, CMD_BUF_SIZE); pMqttRxBuf = 0;
+    memset(MqttTopicBuf, 0, sizeof(MqttTopicBuf));
+
+    return any_found ? 1 : 0;
+}
+
 int8_t ESP8266_ParseInventory(u8* qty_out)
 {
     char* p;
