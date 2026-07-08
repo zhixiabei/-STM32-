@@ -26,8 +26,6 @@
     -webkit-tap-highlight-color:transparent;
     user-select:none;
   }
-
-  /* ── 顶部状态栏 ── */
   .header {
     background:linear-gradient(135deg, #07c160, #06ad56);
     color:#fff;
@@ -50,8 +48,6 @@
   .status.online { background:rgba(255,255,255,.35); }
   .status.offline { background:rgba(231,76,60,.6); animation:pulse 1.5s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-  /* ── 温湿度栏 ── */
   .env-bar {
     display:flex;
     gap:10px;
@@ -68,8 +64,6 @@
   }
   .env-item .val { font-size:22px; font-weight:700; color:var(--accent); }
   .env-item .lbl { font-size:11px; color:var(--sub); margin-top:2px; }
-
-  /* ── 商品网格 ── */
   .section-title {
     font-size:15px;
     font-weight:700;
@@ -105,8 +99,6 @@
     background:var(--danger); color:#fff; font-size:10px;
     padding:2px 6px; border-radius:10px;
   }
-
-  /* ── 底部操作栏 ── */
   .bottom-bar {
     position:sticky;
     bottom:0;
@@ -145,8 +137,6 @@
   }
   .btn-buy:active { opacity:.8; }
   .btn-buy:disabled { background:#ccc; }
-
-  /* ── Toast ── */
   .toast {
     position:fixed; top:60px; left:50%; transform:translateX(-50%);
     background:rgba(0,0,0,.8); color:#fff;
@@ -155,8 +145,6 @@
     opacity:0; transition:opacity .3s;
   }
   .toast.show { opacity:1; }
-
-  /* ── 遮罩弹窗 ── */
   .overlay {
     position:fixed; inset:0; background:rgba(0,0,0,.5);
     display:flex; align-items:center; justify-content:center;
@@ -176,8 +164,6 @@
   }
   .btn-cancel { background:#f0f0f0; border:none; color:var(--text); }
   .btn-confirm{ background:var(--accent); border:none; color:#fff; }
-
-  /* ── 配置面板 ── */
   .config-toggle {
     position:fixed; bottom:80px; right:16px;
     width:40px; height:40px; border-radius:50%;
@@ -206,13 +192,11 @@
 </head>
 <body>
 
-<!-- 顶部 -->
 <div class="header">
   <span class="title">🛒 自动售货机</span>
   <span class="status offline" id="statusDot">未连接</span>
 </div>
 
-<!-- 温湿度 -->
 <div class="env-bar">
   <div class="env-item">
     <div class="val" id="tempVal">--</div>
@@ -224,14 +208,11 @@
   </div>
 </div>
 
-<!-- 商品列表 -->
 <div class="section-title">📦 选择商品</div>
 <div class="product-grid" id="productGrid"></div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<!-- 下单确认弹窗 -->
 <div class="overlay" id="overlay">
   <div class="dialog">
     <div class="dlg-emoji" id="dlgEmoji"></div>
@@ -249,56 +230,49 @@
   </div>
 </div>
 
-<!-- 底部操作栏 -->
 <div class="bottom-bar" id="bottomBar">
   <span style="font-size:13px;color:var(--sub);" id="bottomHint">👆 点击商品开始</span>
   <button class="btn-buy" id="btnBuy" disabled onclick="openDialog()">立即下单</button>
 </div>
 
-<!-- ⚙ 配置按钮 -->
 <button class="config-toggle" onclick="toggleConfig()" title="设置">⚙</button>
 <div class="config-panel" id="configPanel">
-  <label>MQTT WebSocket 地址</label>
-  <input id="cfgBroker" placeholder="wss://mqtts.heclouds.com:8083/mqtt">
+  <label>API 地址</label>
+  <input id="cfgApiBase" placeholder="https://iot-api.heclouds.com">
   <label>产品 ID</label>
   <input id="cfgProductId" placeholder="gtx9E8EU09">
   <label>设备名称</label>
   <input id="cfgDeviceName" placeholder="dev1">
-  <label>MQTT 密码 (Token)</label>
-  <input id="cfgPassword" placeholder="version=2018-10-31&res=...">
-  <button class="btn-save" onclick="saveConfig()">💾 保存并重连</button>
+  <label>Access Key（产品级密钥）</label>
+  <input id="cfgAccessKey" placeholder="raMhR+mJne/VyZNtB22xawsBP6+v...">
+  <button class="btn-save" onclick="saveConfig()">💾 保存并重新检测</button>
 </div>
 
-<!-- 凭据（secret.js 不提交 Git；缺失则手动在 ⚙ 配置） -->
 <script src="secret.js"></script>
-<!-- Paho MQTT -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
 <script>
 // ======================== 配置 ========================
 const DEFAULT_CONFIG = (typeof VENDING_SECRETS !== 'undefined')
   ? { ...VENDING_SECRETS }
   : {
-      broker:    'wss://mqtts.heclouds.com:8083/mqtt',
-      productId: 'YOUR_PRODUCT_ID',
-      deviceName:'YOUR_DEVICE_NAME',
-      password:  'YOUR_MQTT_PASSWORD_TOKEN',
+      apiBase:    'https://iot-api.heclouds.com',
+      productId:  'YOUR_PRODUCT_ID',
+      deviceName: 'YOUR_DEVICE_NAME',
+      accessKey:  'YOUR_ACCESS_KEY',
     };
 
 function getConfig() {
   try {
     const saved = localStorage.getItem('vending_config');
-    if (saved) return JSON.parse(saved);
+    if (saved) { const c = JSON.parse(saved); if (c.accessKey) return c; }
   } catch(e) {}
   return {...DEFAULT_CONFIG};
 }
 
 let cfg = getConfig();
-let mqttClient = null;
-let selectedIdx  = -1;  // 库存索引 (0,2,4,6)
+let selectedIdx  = -1;
 let dlgQty       = 1;
 
-// 商品定义: { idx, name, emoji, price }
 const PRODUCTS = [
   { idx:0, name:'Apple',  emoji:'🍎', price:2 },
   { idx:2, name:'Banana', emoji:'🍌', price:1 },
@@ -306,13 +280,116 @@ const PRODUCTS = [
   { idx:6, name:'Mango',  emoji:'🥭', price:3 },
 ];
 
-// 实时数据
 let devData = {
   temp: null, humi: null,
   Apple: null, Banana: null, Orange: null, Mango: null
 };
 
-// ======================== UI 工具 ========================
+// ======================== HMAC-SHA1 签名 ========================
+async function makeAuth() {
+  const et = Math.floor(Date.now() / 1000) + 3600;      // 1 小时后过期
+  const method = 'sha1';
+  const res = `products/${cfg.productId}`;
+  const version = '2018-10-31';
+  const signStr = `${et}\n${method}\n${res}\n${version}`;
+
+  // 将 base64 access_key 解码为原始字节
+  const keyBytes = Uint8Array.from(atob(cfg.accessKey), c => c.charCodeAt(0));
+  const dataBytes = new TextEncoder().encode(signStr);
+
+  const key = await crypto.subtle.importKey(
+    'raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, dataBytes);
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)));
+  const sigEnc = encodeURIComponent(sigB64);
+
+  return `version=${version}&res=${encodeURIComponent(res)}&et=${et}&method=${method}&sign=${sigEnc}`;
+}
+
+// ======================== HTTP API 调用 ========================
+async function apiCall(method, path, body) {
+  const auth = await makeAuth();
+  const url = `${cfg.apiBase}${path}`;
+  const opts = {
+    method: method,
+    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+
+  console.log(`📡 ${method} ${url}`);
+  const resp = await fetch(url, opts);
+  const text = await resp.text();
+  console.log(`📥 ${resp.status}:`, text.substring(0, 200));
+  if (!resp.ok) throw new Error(`${resp.status} ${text.substring(0, 100)}`);
+  try { return JSON.parse(text); } catch(e) { return text; }
+}
+
+// ======================== 发送出货命令 ========================
+async function sendDispense(idx, count) {
+  for (let i = 0; i < count; i++) {
+    const delay = i * 3100; // 每个间隔 3.1 秒（电机转 2.5s + 余量）
+    await new Promise(resolve => setTimeout(resolve, i === 0 ? 0 : 3100));
+
+    try {
+      // 向设备下发属性 — 设备端 ESP8266_CheckCmd() 扫描 "DISPENSE_X"
+      await apiCall('POST',
+        `/api/v1/product/${cfg.productId}/device/${cfg.deviceName}/thing/property/set`,
+        { params: { dispense_cmd: `DISPENSE_${idx}` } }
+      );
+      console.log(`✅ DISPENSE_${idx} 已发送`);
+    } catch(e) {
+      console.error(`❌ DISPENSE_${idx} 失败:`, e.message);
+      toast(`❌ 第${i+1}次出货失败: ${e.message}`, 3000);
+      return;
+    }
+  }
+
+  // 出货完后刷新数据
+  setTimeout(pollData, 3000);
+}
+
+// ======================== 查询设备数据 ========================
+async function pollData() {
+  try {
+    const json = await apiCall('GET',
+      `/api/v1/product/${cfg.productId}/device/${cfg.deviceName}/thing/property/query/latest`
+    );
+    let changed = false;
+
+    // OneNET 返回格式可能是 { code:0, data:{...} } 或 { data:[{...}] }
+    const list = json.data?.list || json.data || [];
+    (Array.isArray(list) ? list : [list]).forEach(item => {
+      const props = item.properties || item.values || item;
+      PRODUCTS.forEach(p => {
+        if (props[p.name] != null) {
+          const v = Number(props[p.name]);
+          if (!isNaN(v) && devData[p.name] !== v) { devData[p.name] = v; changed = true; }
+        }
+      });
+      if (props.temp != null) {
+        const v = Number(props.temp);
+        if (!isNaN(v) && devData.temp !== v) { devData.temp = v; changed = true; }
+      }
+      if (props.humi != null) {
+        const v = Number(props.humi);
+        if (!isNaN(v) && devData.humi !== v) { devData.humi = v; changed = true; }
+      }
+    });
+
+    if (changed || devData.temp == null) {
+      $('tempVal').textContent = devData.temp ?? '--';
+      $('humiVal').textContent = devData.humi ?? '--';
+      renderProducts();
+    }
+    setStatus(true);
+  } catch(e) {
+    console.warn('⚠ 数据查询失败:', e.message);
+    setStatus(false);
+  }
+}
+
+// ======================== UI ========================
 function $(id) { return document.getElementById(id); }
 
 function toast(msg, ms=2000) {
@@ -340,35 +417,25 @@ function renderProducts() {
         <div class="stock">库存: ${stock}</div>
       </div>`;
   }).join('');
-
   updateBottomBar();
 }
 
 function selectProduct(idx) {
   const p = PRODUCTS.find(x => x.idx === idx);
   const stock = devData[p.name];
-  if (typeof stock === 'number' && stock <= 0) {
-    toast('该商品已售罄');
-    return;
-  }
-  selectedIdx = idx;
-  dlgQty = 1;
-  renderProducts();
-  updateBottomBar();
+  if (typeof stock === 'number' && stock <= 0) { toast('该商品已售罄'); return; }
+  selectedIdx = idx; dlgQty = 1;
+  renderProducts(); updateBottomBar();
 }
 
 function updateBottomBar() {
-  const hint = $('bottomHint');
-  const btn  = $('btnBuy');
+  const hint = $('bottomHint'), btn = $('btnBuy');
   if (selectedIdx < 0) {
-    hint.textContent = '👆 点击商品开始';
-    btn.disabled = true;
-    btn.textContent = '立即下单';
+    hint.textContent = '👆 点击商品开始'; btn.disabled = true; btn.textContent = '立即下单';
   } else {
     const p = PRODUCTS.find(x => x.idx === selectedIdx);
     hint.textContent = `已选: ${p.emoji} ${p.name}`;
-    btn.disabled = false;
-    btn.textContent = `立即下单 ¥${p.price * dlgQty}`;
+    btn.disabled = false; btn.textContent = `立即下单 ¥${p.price * dlgQty}`;
   }
 }
 
@@ -382,129 +449,28 @@ function openDialog() {
   updateDlgDisplay();
   $('overlay').classList.add('show');
 }
-
-function closeDialog() {
-  $('overlay').classList.remove('show');
-}
-
+function closeDialog() { $('overlay').classList.remove('show'); }
 function changeDlgQty(delta) {
   const p = PRODUCTS.find(x => x.idx === selectedIdx);
   const max = (typeof devData[p.name] === 'number') ? devData[p.name] : 99;
   dlgQty = Math.max(1, Math.min(max, dlgQty + delta));
-  updateDlgDisplay();
-  updateBottomBar();
+  updateDlgDisplay(); updateBottomBar();
 }
-
 function updateDlgDisplay() {
   const p = PRODUCTS.find(x => x.idx === selectedIdx);
   $('dlgQty').textContent = dlgQty;
   $('dlgTotal').textContent = p.price * dlgQty;
 }
 
-function confirmOrder() {
+async function confirmOrder() {
   const p = PRODUCTS.find(x => x.idx === selectedIdx);
   const total = p.price * dlgQty;
   closeDialog();
-
-  // 发送 DISPENSE_X 命令（如有多个数量，循环发送）
-  sendDispense(p.idx, dlgQty);
-
-  toast(`✅ 已下单: ${p.name} x${dlgQty}  ¥${total}`, 3000);
-  selectedIdx = -1;
-  dlgQty = 1;
+  toast(`🔄 正在出货: ${p.emoji} ${p.name} x${dlgQty}...`, 3000);
+  await sendDispense(p.idx, dlgQty);
+  toast(`✅ 下单完成: ${p.name} x${dlgQty}  ¥${total}`, 2500);
+  selectedIdx = -1; dlgQty = 1;
   renderProducts();
-}
-
-// ======================== MQTT ========================
-function sendDispense(idx, count) {
-  if (!mqttClient || !mqttClient.isConnected()) {
-    toast('❌ 未连接设备，请检查网络', 2500);
-    return;
-  }
-  const topic = `$sys/${cfg.productId}/${cfg.deviceName}/thing/property/set`;
-  for (let i = 0; i < count; i++) {
-    // 每个 DISPENSE 间隔 3 秒（电机转 2.5 秒 + 余量）
-    const delay = i * 3100;
-    setTimeout(() => {
-      const payload = JSON.stringify({
-        id: String(Date.now()),
-        version: '1.0',
-        params: { dispense_cmd: { value: `DISPENSE_${idx}` } }
-      });
-      const msg = new Paho.MQTT.Message(payload);
-      msg.destinationName = topic;
-      msg.qos = 0;
-      mqttClient.send(msg);
-      console.log('📤', topic, payload);
-    }, delay);
-  }
-  if (count > 1) {
-    toast(`🔄 正在出货 ${count} 次，请稍候...`, count * 3200);
-  }
-}
-
-function connectMQTT() {
-  const brokerUrl = cfg.broker;
-  // Paho 需要 host + port 分开
-  let host, port, useSSL;
-  try {
-    const u = new URL(brokerUrl);
-    host   = u.hostname;
-    port   = Number(u.port) || (u.protocol === 'wss:' ? 443 : 80);
-    useSSL = (u.protocol === 'wss:');
-  } catch(e) {
-    host = 'mqtts.heclouds.com';
-    port = 8083;
-    useSSL = true;
-  }
-
-  const clientId = cfg.deviceName + '_web_' + Math.random().toString(36).slice(2, 8);
-  mqttClient = new Paho.MQTT.Client(host, port, '/mqtt', clientId);
-
-  mqttClient.onConnectionLost = (resp) => {
-    console.warn('⚠ MQTT 断开:', resp.errorMessage);
-    setStatus(false);
-    // 5 秒后自动重连
-    setTimeout(connectMQTT, 5000);
-  };
-
-  mqttClient.onMessageArrived = (msg) => {
-    console.log('📥', msg.destinationName, msg.payloadString);
-    handleMessage(msg.destinationName, msg.payloadString);
-  };
-
-  const opts = {
-    useSSL: useSSL,
-    userName: cfg.productId,
-    password: cfg.password,
-    timeout: 10,
-    keepAliveInterval: 60,
-    cleanSession: true,
-    onSuccess: () => {
-      console.log('✅ MQTT 已连接');
-      setStatus(true);
-
-      // 订阅数据上报 topic
-      const dataTopic = `$sys/${cfg.productId}/${cfg.deviceName}/thing/property/post`;
-      mqttClient.subscribe(dataTopic, { qos: 0 });
-
-      // 也订阅属性设置回复
-      const replyTopic = `$sys/${cfg.productId}/${cfg.deviceName}/thing/property/set_reply`;
-      mqttClient.subscribe(replyTopic, { qos: 0 });
-
-      toast('✅ 已连接到售货机');
-    },
-    onFailure: (err) => {
-      console.error('❌ MQTT 连接失败:', err.errorMessage);
-      setStatus(false);
-      toast('❌ 连接失败: ' + err.errorMessage, 3000);
-      // 10 秒后重试
-      setTimeout(connectMQTT, 10000);
-    }
-  };
-
-  console.log('🔗 连接 MQTT:', `${useSSL?'wss':'ws'}://${host}:${port}/mqtt`);
-  mqttClient.connect(opts);
 }
 
 function setStatus(online) {
@@ -513,68 +479,30 @@ function setStatus(online) {
   dot.className = 'status ' + (online ? 'online' : 'offline');
 }
 
-function handleMessage(topic, payload) {
-  // 解析 OneNET 属性上报 JSON
-  try {
-    const json = JSON.parse(payload);
-    const params = json.params || json.data?.params || json;
-    let changed = false;
-    PRODUCTS.forEach(p => {
-      if (params[p.name] && typeof params[p.name].value !== 'undefined') {
-        const v = params[p.name].value;
-        if (devData[p.name] !== v) { devData[p.name] = v; changed = true; }
-      }
-    });
-    if (params.temp && typeof params.temp.value !== 'undefined') {
-      const v = params.temp.value;
-      if (devData.temp !== v) { devData.temp = v; changed = true; }
-    }
-    if (params.humi && typeof params.humi.value !== 'undefined') {
-      const v = params.humi.value;
-      if (devData.humi !== v) { devData.humi = v; changed = true; }
-    }
-    if (changed) {
-      $('tempVal').textContent = devData.temp ?? '--';
-      $('humiVal').textContent = devData.humi ?? '--';
-      renderProducts();
-    }
-  } catch(e) {
-    // 非 JSON 负载，忽略
-    console.log('⚠ 无法解析:', payload.substring(0, 80));
-  }
-}
-
 // ======================== 配置面板 ========================
-function toggleConfig() {
-  $('configPanel').classList.toggle('show');
-}
-
+function toggleConfig() { $('configPanel').classList.toggle('show'); }
 function loadConfigUI() {
-  $('cfgBroker').value    = cfg.broker;
-  $('cfgProductId').value = cfg.productId;
-  $('cfgDeviceName').value= cfg.deviceName;
-  $('cfgPassword').value  = cfg.password;
+  $('cfgApiBase').value    = cfg.apiBase;
+  $('cfgProductId').value  = cfg.productId;
+  $('cfgDeviceName').value = cfg.deviceName;
+  $('cfgAccessKey').value  = cfg.accessKey;
 }
-
 function saveConfig() {
-  cfg.broker     = $('cfgBroker').value.trim()     || DEFAULT_CONFIG.broker;
+  cfg.apiBase    = $('cfgApiBase').value.trim()    || DEFAULT_CONFIG.apiBase;
   cfg.productId  = $('cfgProductId').value.trim()  || DEFAULT_CONFIG.productId;
   cfg.deviceName = $('cfgDeviceName').value.trim() || DEFAULT_CONFIG.deviceName;
-  cfg.password   = $('cfgPassword').value.trim()   || DEFAULT_CONFIG.password;
+  cfg.accessKey  = $('cfgAccessKey').value.trim()  || DEFAULT_CONFIG.accessKey;
   localStorage.setItem('vending_config', JSON.stringify(cfg));
   $('configPanel').classList.remove('show');
-  toast('⚙ 配置已保存，重新连接...', 1500);
-  // 断开重连
-  if (mqttClient && mqttClient.isConnected()) {
-    mqttClient.disconnect();
-  }
-  setTimeout(connectMQTT, 800);
+  toast('⚙ 配置已保存，检测连接...', 1500);
+  pollData();
 }
 
 // ======================== 启动 ========================
 loadConfigUI();
 renderProducts();
-connectMQTT();
+pollData();
+setInterval(pollData, 15000);  // 每 15 秒刷新数据
 </script>
 </body>
 </html>
