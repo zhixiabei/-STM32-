@@ -5,207 +5,60 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>自动售货机</title>
 <style>
-  :root {
-    --bg:    #f5f5f5;
-    --card:  #ffffff;
-    --text:  #333333;
-    --sub:   #888888;
-    --accent:#07c160;
-    --danger:#e74c3c;
-    --warn:  #f39c12;
-    --border:#e0e0e0;
-    --shadow:0 2px 8px rgba(0,0,0,.08);
-    --radius:12px;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background:var(--bg);
-    color:var(--text);
-    min-height:100vh;
-    -webkit-tap-highlight-color:transparent;
-    user-select:none;
-  }
-  .header {
-    background:linear-gradient(135deg, #07c160, #06ad56);
-    color:#fff;
-    padding:12px 16px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    position:sticky;
-    top:0;
-    z-index:10;
-    box-shadow:0 2px 8px rgba(7,193,96,.3);
-  }
-  .header .title { font-size:18px; font-weight:700; }
-  .header .status {
-    font-size:12px;
-    padding:4px 10px;
-    border-radius:20px;
-    background:rgba(255,255,255,.25);
-  }
-  .status.online { background:rgba(255,255,255,.35); }
-  .status.offline { background:rgba(231,76,60,.6); animation:pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-  .env-bar {
-    display:flex;
-    gap:10px;
-    padding:12px 16px;
-  }
-  .env-item {
-    flex:1;
-    background:var(--card);
-    border-radius:var(--radius);
-    padding:10px;
-    text-align:center;
-    box-shadow:var(--shadow);
-    font-size:14px;
-  }
-  .env-item .val { font-size:22px; font-weight:700; color:var(--accent); }
-  .env-item .lbl { font-size:11px; color:var(--sub); margin-top:2px; }
-  .section-title {
-    font-size:15px;
-    font-weight:700;
-    padding:8px 16px 4px;
-    color:var(--text);
-  }
-  .product-grid {
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
-    padding:8px 16px 16px;
-  }
-  .product-card {
-    background:var(--card);
-    border-radius:var(--radius);
-    padding:16px;
-    text-align:center;
-    box-shadow:var(--shadow);
-    cursor:pointer;
-    transition:transform .15s, box-shadow .15s;
-    position:relative;
-    border:2px solid transparent;
-  }
-  .product-card:active { transform:scale(.96); box-shadow:0 1px 3px rgba(0,0,0,.12); }
-  .product-card.selected { border-color:var(--accent); }
-  .product-card.sold-out { opacity:.5; pointer-events:none; }
-  .product-card .emoji { font-size:42px; margin-bottom:6px; }
-  .product-card .name  { font-size:15px; font-weight:600; }
-  .product-card .price { font-size:13px; color:var(--accent); margin:4px 0; }
-  .product-card .stock { font-size:12px; color:var(--sub); }
-  .product-card .badge {
-    position:absolute; top:8px; right:8px;
-    background:var(--danger); color:#fff; font-size:10px;
-    padding:2px 6px; border-radius:10px;
-  }
-  .bottom-bar {
-    position:sticky;
-    bottom:0;
-    background:var(--card);
-    padding:12px 16px;
-    box-shadow:0 -2px 8px rgba(0,0,0,.08);
-    display:flex;
-    align-items:center;
-    gap:12px;
-    z-index:10;
-  }
-  .qty-ctrl {
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-  .qty-ctrl button {
-    width:36px; height:36px; border-radius:50%;
-    border:2px solid var(--border); background:#fff;
-    font-size:20px; font-weight:700; line-height:1;
-    cursor:pointer; color:var(--text);
-  }
-  .qty-ctrl button:active { background:#f0f0f0; }
-  .qty-ctrl .qty { font-size:20px; font-weight:700; min-width:28px; text-align:center; }
-  .btn-buy {
-    flex:1;
-    background:var(--accent);
-    color:#fff;
-    border:none;
-    border-radius:24px;
-    padding:14px;
-    font-size:17px;
-    font-weight:700;
-    cursor:pointer;
-    transition:opacity .2s;
-  }
-  .btn-buy:active { opacity:.8; }
-  .btn-buy:disabled { background:#ccc; }
-  .toast {
-    position:fixed; top:60px; left:50%; transform:translateX(-50%);
-    background:rgba(0,0,0,.8); color:#fff;
-    padding:10px 24px; border-radius:20px;
-    font-size:14px; z-index:99; pointer-events:none;
-    opacity:0; transition:opacity .3s;
-  }
-  .toast.show { opacity:1; }
-  .overlay {
-    position:fixed; inset:0; background:rgba(0,0,0,.5);
-    display:flex; align-items:center; justify-content:center;
-    z-index:50; visibility:hidden; opacity:0; transition:.25s;
-  }
-  .overlay.show { visibility:visible; opacity:1; }
-  .dialog {
-    background:var(--card); border-radius:var(--radius);
-    padding:24px; width:85vw; max-width:320px; text-align:center;
-  }
-  .dialog .dlg-emoji { font-size:48px; }
-  .dialog .dlg-name  { font-size:18px; font-weight:700; margin:8px 0; }
-  .dialog .dlg-info  { font-size:13px; color:var(--sub); margin-bottom:16px; }
-  .dialog .dlg-btns  { display:flex; gap:10px; }
-  .dialog .dlg-btns button {
-    flex:1; padding:12px; border-radius:24px; font-size:15px; font-weight:600; cursor:pointer;
-  }
-  .btn-cancel { background:#f0f0f0; border:none; color:var(--text); }
-  .btn-confirm{ background:var(--accent); border:none; color:#fff; }
-  .config-toggle {
-    position:fixed; bottom:80px; right:16px;
-    width:40px; height:40px; border-radius:50%;
-    background:var(--card); box-shadow:var(--shadow);
-    border:none; font-size:20px; cursor:pointer; z-index:20;
-  }
-  .config-panel {
-    position:fixed; bottom:130px; right:16px; left:16px;
-    background:var(--card); border-radius:var(--radius);
-    padding:16px; box-shadow:0 4px 16px rgba(0,0,0,.15);
-    z-index:20; display:none;
-    max-width:360px; margin-left:auto;
-  }
-  .config-panel.show { display:block; }
-  .config-panel label { font-size:12px; color:var(--sub); display:block; margin-top:8px; }
-  .config-panel input {
-    width:100%; padding:8px; margin-top:4px; border:1px solid var(--border);
-    border-radius:8px; font-size:14px;
-  }
-  .config-panel .btn-save {
-    width:100%; margin-top:12px; padding:10px;
-    background:var(--accent); color:#fff; border:none;
-    border-radius:20px; font-size:14px; font-weight:600; cursor:pointer;
-  }
+:root{--bg:#f5f5f5;--card:#fff;--text:#333;--sub:#888;--accent:#07c160;--danger:#e74c3c;--border:#e0e0e0;--shadow:0 2px 8px rgba(0,0,0,.08);--radius:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-tap-highlight-color:transparent;user-select:none}
+.header{background:linear-gradient(135deg,#07c160,#06ad56);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px rgba(7,193,96,.3)}
+.header .title{font-size:18px;font-weight:700}
+.header .status{font-size:11px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.25)}
+.status.online{background:rgba(255,255,255,.35)}
+.status.offline{background:rgba(231,76,60,.6);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.env-bar{display:flex;gap:10px;padding:12px 16px}
+.env-item{flex:1;background:var(--card);border-radius:var(--radius);padding:10px;text-align:center;box-shadow:var(--shadow);font-size:14px}
+.env-item .val{font-size:22px;font-weight:700;color:var(--accent)}
+.env-item .lbl{font-size:11px;color:var(--sub);margin-top:2px}
+.section-title{font-size:15px;font-weight:700;padding:8px 16px 4px}
+.product-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px 16px}
+.product-card{background:var(--card);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow);cursor:pointer;transition:transform .15s;position:relative;border:2px solid transparent}
+.product-card:active{transform:scale(.96)}
+.product-card.selected{border-color:var(--accent)}
+.product-card.sold-out{opacity:.5;pointer-events:none}
+.product-card .emoji{font-size:42px;margin-bottom:6px}
+.product-card .name{font-size:15px;font-weight:600}
+.product-card .price{font-size:13px;color:var(--accent);margin:4px 0}
+.product-card .stock{font-size:12px;color:var(--sub)}
+.product-card .badge{position:absolute;top:8px;right:8px;background:var(--danger);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px}
+.bottom-bar{position:sticky;bottom:0;background:var(--card);padding:12px 16px;box-shadow:0 -2px 8px rgba(0,0,0,.08);display:flex;align-items:center;gap:12px;z-index:10}
+.qty-ctrl{display:flex;align-items:center;gap:8px}
+.qty-ctrl button{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);background:#fff;font-size:20px;font-weight:700;cursor:pointer;color:var(--text)}
+.qty-ctrl .qty{font-size:20px;font-weight:700;min-width:28px;text-align:center}
+.btn-buy{flex:1;background:var(--accent);color:#fff;border:none;border-radius:24px;padding:14px;font-size:17px;font-weight:700;cursor:pointer}
+.btn-buy:active{opacity:.8}.btn-buy:disabled{background:#ccc}
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 24px;border-radius:20px;font-size:14px;z-index:99;pointer-events:none;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;visibility:hidden;opacity:0;transition:.25s}
+.overlay.show{visibility:visible;opacity:1}
+.dialog{background:var(--card);border-radius:var(--radius);padding:24px;width:85vw;max-width:320px;text-align:center}
+.dialog .dlg-emoji{font-size:48px}
+.dialog .dlg-name{font-size:18px;font-weight:700;margin:8px 0}
+.dialog .dlg-info{font-size:13px;color:var(--sub);margin-bottom:16px}
+.dialog .dlg-btns{display:flex;gap:10px}
+.dialog .dlg-btns button{flex:1;padding:12px;border-radius:24px;font-size:15px;font-weight:600;cursor:pointer}
+.btn-cancel{background:#f0f0f0;border:none;color:var(--text)}
+.btn-confirm{background:var(--accent);border:none;color:#fff}
 </style>
 </head>
 <body>
 
 <div class="header">
   <span class="title">🛒 自动售货机</span>
-  <span class="status offline" id="statusDot">未连接</span>
+  <span class="status offline" id="statusDot">等待连接</span>
 </div>
 
 <div class="env-bar">
-  <div class="env-item">
-    <div class="val" id="tempVal">--</div>
-    <div class="lbl">🌡 温度 °C</div>
-  </div>
-  <div class="env-item">
-    <div class="val" id="humiVal">--</div>
-    <div class="lbl">💧 湿度 %</div>
-  </div>
+  <div class="env-item"><div class="val" id="tempVal">--</div><div class="lbl">🌡 温度 °C</div></div>
+  <div class="env-item"><div class="val" id="humiVal">--</div><div class="lbl">💧 湿度 %</div></div>
 </div>
 
 <div class="section-title">📦 选择商品</div>
@@ -216,293 +69,79 @@
 <div class="overlay" id="overlay">
   <div class="dialog">
     <div class="dlg-emoji" id="dlgEmoji"></div>
-    <div class="dlg-name"  id="dlgName"></div>
-    <div class="dlg-info"  id="dlgInfo"></div>
-    <div class="qty-ctrl" style="justify-content:center;margin-bottom:16px;">
-      <button onclick="changeDlgQty(-1)">−</button>
+    <div class="dlg-name" id="dlgName"></div>
+    <div class="dlg-info" id="dlgInfo"></div>
+    <div class="qty-ctrl" style="justify-content:center;margin-bottom:16px">
+      <button onclick="changeQty(-1)">−</button>
       <span class="qty" id="dlgQty">1</span>
-      <button onclick="changeDlgQty(+1)">+</button>
+      <button onclick="changeQty(+1)">+</button>
     </div>
     <div class="dlg-btns">
-      <button class="btn-cancel"  onclick="closeDialog()">取消</button>
-      <button class="btn-confirm" onclick="confirmOrder()">确认下单 ¥<span id="dlgTotal">0</span></button>
+      <button class="btn-cancel" onclick="closeDlg()">取消</button>
+      <button class="btn-confirm" onclick="confirm()">确认下单 ¥<span id="dlgTotal">0</span></button>
     </div>
   </div>
 </div>
 
-<div class="bottom-bar" id="bottomBar">
-  <span style="font-size:13px;color:var(--sub);" id="bottomHint">👆 点击商品开始</span>
-  <button class="btn-buy" id="btnBuy" disabled onclick="openDialog()">立即下单</button>
+<div class="bottom-bar">
+  <span style="font-size:13px;color:var(--sub)" id="bottomHint">👆 点击商品开始</span>
+  <button class="btn-buy" id="btnBuy" disabled onclick="openDlg()">立即下单</button>
 </div>
-
-<button class="config-toggle" onclick="toggleConfig()" title="设置">⚙</button>
-<div class="config-panel" id="configPanel">
-  <label>API 地址</label>
-  <input id="cfgApiBase" placeholder="https://iot-api.heclouds.com">
-  <label>产品 ID</label>
-  <input id="cfgProductId" placeholder="gtx9E8EU09">
-  <label>设备名称</label>
-  <input id="cfgDeviceName" placeholder="dev1">
-  <label>Access Key（产品级密钥）</label>
-  <input id="cfgAccessKey" placeholder="raMhR+mJne/VyZNtB22xawsBP6+v...">
-  <button class="btn-save" onclick="saveConfig()">💾 保存并重新检测</button>
-</div>
-
-<script src="secret.js"></script>
 
 <script>
-// ======================== 配置 ========================
-const DEFAULT_CONFIG = (typeof VENDING_SECRETS !== 'undefined')
-  ? { ...VENDING_SECRETS }
-  : {
-      apiBase:    'https://iot-api.heclouds.com',
-      productId:  'YOUR_PRODUCT_ID',
-      deviceName: 'YOUR_DEVICE_NAME',
-      accessKey:  'YOUR_ACCESS_KEY',
-    };
+// ======================== 数据 ========================
+let dev={t:null,h:null,Apple:null,Banana:null,Orange:null,Mango:null};
+let sel=-1, qty=1, online=false;
+const P=[{i:0,n:'Apple',e:'🍎',p:2},{i:2,n:'Banana',e:'🍌',p:1},{i:4,n:'Orange',e:'🍊',p:2},{i:6,n:'Mango',e:'🥭',p:3}];
+function $(id){return document.getElementById(id)}
 
-function getConfig() {
-  try {
-    const saved = localStorage.getItem('vending_config');
-    if (saved) { const c = JSON.parse(saved); if (c.accessKey) return c; }
-  } catch(e) {}
-  return {...DEFAULT_CONFIG};
-}
-
-let cfg = getConfig();
-let selectedIdx  = -1;
-let dlgQty       = 1;
-
-const PRODUCTS = [
-  { idx:0, name:'Apple',  emoji:'🍎', price:2 },
-  { idx:2, name:'Banana', emoji:'🍌', price:1 },
-  { idx:4, name:'Orange', emoji:'🍊', price:2 },
-  { idx:6, name:'Mango',  emoji:'🥭', price:3 },
-];
-
-let devData = {
-  temp: null, humi: null,
-  Apple: null, Banana: null, Orange: null, Mango: null
-};
-
-// ======================== HMAC-SHA1 签名 ========================
-async function makeAuth() {
-  const et = Math.floor(Date.now() / 1000) + 3600;      // 1 小时后过期
-  const method = 'sha1';
-  const res = `products/${cfg.productId}`;
-  const version = '2018-10-31';
-  const signStr = `${et}\n${method}\n${res}\n${version}`;
-
-  // 将 base64 access_key 解码为原始字节
-  const keyBytes = Uint8Array.from(atob(cfg.accessKey), c => c.charCodeAt(0));
-  const dataBytes = new TextEncoder().encode(signStr);
-
-  const key = await crypto.subtle.importKey(
-    'raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, dataBytes);
-  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)));
-  const sigEnc = encodeURIComponent(sigB64);
-
-  return `version=${version}&res=${encodeURIComponent(res)}&et=${et}&method=${method}&sign=${sigEnc}`;
-}
-
-// ======================== HTTP API 调用 ========================
-async function apiCall(method, path, body) {
-  const auth = await makeAuth();
-  const url = `${cfg.apiBase}${path}`;
-  const opts = {
-    method: method,
-    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
-  };
-  if (body) opts.body = JSON.stringify(body);
-
-  console.log(`📡 ${method} ${url}`);
-  const resp = await fetch(url, opts);
-  const text = await resp.text();
-  console.log(`📥 ${resp.status}:`, text.substring(0, 200));
-  if (!resp.ok) throw new Error(`${resp.status} ${text.substring(0, 100)}`);
-  try { return JSON.parse(text); } catch(e) { return text; }
-}
-
-// ======================== 发送出货命令 ========================
-async function sendDispense(idx, count) {
-  for (let i = 0; i < count; i++) {
-    const delay = i * 3100; // 每个间隔 3.1 秒（电机转 2.5s + 余量）
-    await new Promise(resolve => setTimeout(resolve, i === 0 ? 0 : 3100));
-
-    try {
-      // 向设备下发属性 — 设备端 ESP8266_CheckCmd() 扫描 "DISPENSE_X"
-      await apiCall('POST',
-        `/api/v1/product/${cfg.productId}/device/${cfg.deviceName}/thing/property/set`,
-        { params: { dispense_cmd: `DISPENSE_${idx}` } }
-      );
-      console.log(`✅ DISPENSE_${idx} 已发送`);
-    } catch(e) {
-      console.error(`❌ DISPENSE_${idx} 失败:`, e.message);
-      toast(`❌ 第${i+1}次出货失败: ${e.message}`, 3000);
-      return;
+// ======================== API ========================
+async function fetchData(){
+  try{
+    let r=await fetch('/data'), j=await r.json();
+    online=j.connected;
+    if(j.data){
+      let d=j.data, ch=false;
+      ['t','h'].forEach(k=>{if(d[k]=='temp'?d.temp!=null:d.humi!=null){let v=Number(k=='t'?d.temp:d.humi);if(!isNaN(v)&&dev[k]!==v){dev[k]=v;ch=true}}});
+      // temp/humi 在 OneNET JSON 里是小写 key
+      if(d.temp!=null){let v=Number(d.temp);if(!isNaN(v)&&dev.t!==v){dev.t=v;ch=true}}
+      if(d.humi!=null){let v=Number(d.humi);if(!isNaN(v)&&dev.h!==v){dev.h=v;ch=true}}
+      P.forEach(x=>{if(d[x.n]!=null){let v=Number(d[x.n]);if(!isNaN(v)&&dev[x.n]!==v){dev[x.n]=v;ch=true}}});
+      if(ch||dev.t==null){$('tempVal').textContent=dev.t??'--';$('humiVal').textContent=dev.h??'--';render()}
     }
-  }
-
-  // 出货完后刷新数据
-  setTimeout(pollData, 3000);
+    setSt(online);
+  }catch(e){setSt(false)}
 }
 
-// ======================== 查询设备数据 ========================
-async function pollData() {
-  try {
-    const json = await apiCall('GET',
-      `/api/v1/product/${cfg.productId}/device/${cfg.deviceName}/thing/property/query/latest`
-    );
-    let changed = false;
-
-    // OneNET 返回格式可能是 { code:0, data:{...} } 或 { data:[{...}] }
-    const list = json.data?.list || json.data || [];
-    (Array.isArray(list) ? list : [list]).forEach(item => {
-      const props = item.properties || item.values || item;
-      PRODUCTS.forEach(p => {
-        if (props[p.name] != null) {
-          const v = Number(props[p.name]);
-          if (!isNaN(v) && devData[p.name] !== v) { devData[p.name] = v; changed = true; }
-        }
-      });
-      if (props.temp != null) {
-        const v = Number(props.temp);
-        if (!isNaN(v) && devData.temp !== v) { devData.temp = v; changed = true; }
-      }
-      if (props.humi != null) {
-        const v = Number(props.humi);
-        if (!isNaN(v) && devData.humi !== v) { devData.humi = v; changed = true; }
-      }
-    });
-
-    if (changed || devData.temp == null) {
-      $('tempVal').textContent = devData.temp ?? '--';
-      $('humiVal').textContent = devData.humi ?? '--';
-      renderProducts();
-    }
-    setStatus(true);
-  } catch(e) {
-    console.warn('⚠ 数据查询失败:', e.message);
-    setStatus(false);
-  }
+async function sendDispense(idx){
+  try{
+    let r=await fetch('/dispense',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idx})});
+    let j=await r.json();
+    if(j.ok){toast('✅ 命令已发送，观察设备出货',2500);setTimeout(fetchData,3000)}
+    else toast('❌ '+j.msg,3000);
+  }catch(e){toast('❌ 发送失败: '+e.message,3000)}
 }
 
 // ======================== UI ========================
-function $(id) { return document.getElementById(id); }
-
-function toast(msg, ms=2000) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._tid);
-  t._tid = setTimeout(() => t.classList.remove('show'), ms);
-}
-
-function renderProducts() {
-  const grid = $('productGrid');
-  grid.innerHTML = PRODUCTS.map(p => {
-    const stock = devData[p.name] ?? '--';
-    const soldOut = (typeof stock === 'number' && stock <= 0);
-    const sel = (p.idx === selectedIdx) ? ' selected' : '';
-    const so = soldOut ? ' sold-out' : '';
-    const badge = soldOut ? '<div class="badge">售罄</div>' : '';
-    return `
-      <div class="product-card${sel}${so}" onclick="selectProduct(${p.idx})">
-        ${badge}
-        <div class="emoji">${p.emoji}</div>
-        <div class="name">${p.name}</div>
-        <div class="price">¥${p.price}</div>
-        <div class="stock">库存: ${stock}</div>
-      </div>`;
-  }).join('');
-  updateBottomBar();
-}
-
-function selectProduct(idx) {
-  const p = PRODUCTS.find(x => x.idx === idx);
-  const stock = devData[p.name];
-  if (typeof stock === 'number' && stock <= 0) { toast('该商品已售罄'); return; }
-  selectedIdx = idx; dlgQty = 1;
-  renderProducts(); updateBottomBar();
-}
-
-function updateBottomBar() {
-  const hint = $('bottomHint'), btn = $('btnBuy');
-  if (selectedIdx < 0) {
-    hint.textContent = '👆 点击商品开始'; btn.disabled = true; btn.textContent = '立即下单';
-  } else {
-    const p = PRODUCTS.find(x => x.idx === selectedIdx);
-    hint.textContent = `已选: ${p.emoji} ${p.name}`;
-    btn.disabled = false; btn.textContent = `立即下单 ¥${p.price * dlgQty}`;
-  }
-}
-
-function openDialog() {
-  if (selectedIdx < 0) return;
-  const p = PRODUCTS.find(x => x.idx === selectedIdx);
-  dlgQty = 1;
-  $('dlgEmoji').textContent = p.emoji;
-  $('dlgName').textContent  = p.name;
-  $('dlgInfo').textContent  = `单价 ¥${p.price}  |  库存 ${devData[p.name] ?? '?'}`;
-  updateDlgDisplay();
-  $('overlay').classList.add('show');
-}
-function closeDialog() { $('overlay').classList.remove('show'); }
-function changeDlgQty(delta) {
-  const p = PRODUCTS.find(x => x.idx === selectedIdx);
-  const max = (typeof devData[p.name] === 'number') ? devData[p.name] : 99;
-  dlgQty = Math.max(1, Math.min(max, dlgQty + delta));
-  updateDlgDisplay(); updateBottomBar();
-}
-function updateDlgDisplay() {
-  const p = PRODUCTS.find(x => x.idx === selectedIdx);
-  $('dlgQty').textContent = dlgQty;
-  $('dlgTotal').textContent = p.price * dlgQty;
-}
-
-async function confirmOrder() {
-  const p = PRODUCTS.find(x => x.idx === selectedIdx);
-  const total = p.price * dlgQty;
-  closeDialog();
-  toast(`🔄 正在出货: ${p.emoji} ${p.name} x${dlgQty}...`, 3000);
-  await sendDispense(p.idx, dlgQty);
-  toast(`✅ 下单完成: ${p.name} x${dlgQty}  ¥${total}`, 2500);
-  selectedIdx = -1; dlgQty = 1;
-  renderProducts();
-}
-
-function setStatus(online) {
-  const dot = $('statusDot');
-  dot.textContent = online ? '● 已连接' : '未连接';
-  dot.className = 'status ' + (online ? 'online' : 'offline');
-}
-
-// ======================== 配置面板 ========================
-function toggleConfig() { $('configPanel').classList.toggle('show'); }
-function loadConfigUI() {
-  $('cfgApiBase').value    = cfg.apiBase;
-  $('cfgProductId').value  = cfg.productId;
-  $('cfgDeviceName').value = cfg.deviceName;
-  $('cfgAccessKey').value  = cfg.accessKey;
-}
-function saveConfig() {
-  cfg.apiBase    = $('cfgApiBase').value.trim()    || DEFAULT_CONFIG.apiBase;
-  cfg.productId  = $('cfgProductId').value.trim()  || DEFAULT_CONFIG.productId;
-  cfg.deviceName = $('cfgDeviceName').value.trim() || DEFAULT_CONFIG.deviceName;
-  cfg.accessKey  = $('cfgAccessKey').value.trim()  || DEFAULT_CONFIG.accessKey;
-  localStorage.setItem('vending_config', JSON.stringify(cfg));
-  $('configPanel').classList.remove('show');
-  toast('⚙ 配置已保存，检测连接...', 1500);
-  pollData();
-}
+function toast(msg,ms=2000){let t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),ms)}
+function setSt(on){let d=$('statusDot');d.textContent=on?'● 已连接':'未连接';d.className='status '+(on?'online':'offline')}
+function render(){
+  $('productGrid').innerHTML=P.map(x=>{
+    let s=dev[x.n]??'--', so=typeof s==='number'&&s<=0;
+    return`<div class="product-card${x.i===sel?' selected':''}${so?' sold-out':''}" onclick="pick(${x.i})">${so?'<div class="badge">售罄</div>':''}<div class="emoji">${x.e}</div><div class="name">${x.n}</div><div class="price">¥${x.p}</div><div class="stock">库存: ${s}</div></div>`
+  }).join('');upBar()}
+function pick(i){let x=P.find(y=>y.i===i);if(typeof dev[x.n]==='number'&&dev[x.n]<=0){toast('售罄');return}sel=i;qty=1;render();upBar()}
+function upBar(){let h=$('bottomHint'),b=$('btnBuy');if(sel<0){h.textContent='👆 点击商品开始';b.disabled=true;b.textContent='立即下单'}else{let x=P.find(y=>y.i===sel);h.textContent=`已选: ${x.e} ${x.n}`;b.disabled=false;b.textContent=`立即下单 ¥${x.p*qty}`}}
+function openDlg(){if(sel<0)return;let x=P.find(y=>y.i===sel);qty=1;$('dlgEmoji').textContent=x.e;$('dlgName').textContent=x.n;$('dlgInfo').textContent=`单价 ¥${x.p} | 库存 ${dev[x.n]??'?'}`;upDlg();$('overlay').classList.add('show')}
+function closeDlg(){$('overlay').classList.remove('show')}
+function changeQty(d){let x=P.find(y=>y.i===sel),m=typeof dev[x.n]==='number'?dev[x.n]:99;qty=Math.max(1,Math.min(m,qty+d));upDlg();upBar()}
+function upDlg(){let x=P.find(y=>y.i===sel);$('dlgQty').textContent=qty;$('dlgTotal').textContent=x.p*qty}
+async function confirm(){let x=P.find(y=>y.i===sel),t=x.p*qty;closeDlg();toast(`🔄 正在发送命令...`,3000);await sendDispense(x.i);sel=-1;qty=1;render()}
 
 // ======================== 启动 ========================
-loadConfigUI();
-renderProducts();
-pollData();
-setInterval(pollData, 15000);  // 每 15 秒刷新数据
+render();
+fetchData();
+setInterval(fetchData, 5000);
 </script>
 </body>
 </html>

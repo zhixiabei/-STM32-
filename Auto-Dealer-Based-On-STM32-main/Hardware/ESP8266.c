@@ -11,6 +11,7 @@ extern volatile int pRxPacket;
 #define CMD_BUF_SIZE  512
 char  MqttRxBuf[CMD_BUF_SIZE];
 volatile int pMqttRxBuf = 0;
+static char MqttTopicBuf[256];          /* 保存最近收到的 MQTT topic */
 
 static void NopDelayMs(volatile u32 ms)
 {
@@ -27,8 +28,13 @@ const char* DEVICE_NAME = SECRET_ONENET_DEVICE_NAME;
 const char* MQTT_PASS   = SECRET_ONENET_MQTT_PASS;
 
 static char Topic_DataUp[128];
-static char Topic_CmdDown[128];       /* 订阅：接收云端命令 */
+static char Topic_CmdDown[128];       /* 订阅：接收属性设置 */
+static char Topic_SvcInvoke[4][100];  /* 订阅：4 个 DISPENSE 服务调用 topic */
 static u16  mqtt_packet_id = 1;
+
+/* 最近一次服务调用的消息 ID 和槽位（异步回复用） */
+static char   SvcMsgId[64];
+static int8_t SvcSlot = -1;          /* 当前服务调用对应的货道号 */
 
 static int tcp_send(const u8* data, int len)
 {
@@ -99,10 +105,11 @@ static int mqtt_connect(void)
     return tcp_send(pkt, pos);
 }
 
-/* ---- MQTT SUBSCRIBE —— 订阅 OneNET 属性设置主题 ---- */
-static int mqtt_subscribe(void)
+/* ---- MQTT SUBSCRIBE —— 订阅指定主题 ---- */
+static int mqtt_subscribe_topic(const char* topic)
 {
-    const char* topic = Topic_CmdDown;
+    if (topic == NULL || *topic == '\0') return 0;
+
     int tl = strlen(topic);
     int rl = 2 + 2 + tl + 1;   /* PacketID(2) + TopicLen(2) + Topic + QoS(1) */
     u8 pkt[256]; int pos = 0;
@@ -147,53 +154,95 @@ static int mqtt_publish(const char* topic, const char* payload)
     return tcp_send(pkt, pos);
 }
 
-/* ---- 从 Serial_RxPacket 中提取 +IPD 数据到 MqttRxBuf ---- */
+/* ---- 从 Serial_RxPacket 中提取 +IPD 数据到 MqttRxBuf ----
+   MQTT 报文是二进制数据，不能当 C 字符串处理（topic 长度字段含 0x00）。
+   改为按 +IPD,<len>: 中的长度精确拷贝 len 个字节，跳过 MQTT 头部，
+   只把 JSON payload 部分复制到 MqttRxBuf，方便 strstr() 搜索命令。 */
 void ESP8266_FeedCmdBuf(void)
 {
     char* ipd;
-    char* start;
+    int   data_len;
+    int   topic_len = 0;
+    int   copy_start;
+    int   copy_len;
+    int   hdr_end = 0;        /* MQTT 固定头结束位置（save_raw 兜底也需要） */
 
     ipd = strstr((const char*)Serial_RxPacket, "+IPD,");
     if (!ipd) return;
 
-    /* 跳过 "+IPD," */
-    ipd += 5;
+    ipd += 5;                           /* 跳过 "+IPD," */
 
-    /* 跳过长度数字 */
-    while (*ipd >= '0' && *ipd <= '9') ipd++;
-
-    /* 跳过 ':' */
-    if (*ipd != ':') {
-        /* 格式不对，清掉这段避免重复扫描 */
+    /* 解析长度 */
+    data_len = 0;
+    while (*ipd >= '0' && *ipd <= '9') {
+        data_len = data_len * 10 + (*ipd - '0');
+        ipd++;
+    }
+    if (*ipd != ':' || data_len <= 0) {
         memset(Serial_RxPacket, 0, SERIAL_RX_SIZE);
         pRxPacket = 0;
         return;
     }
-    ipd++;
+    ipd++;                              /* 跳过 ':' */
+    if (data_len < 3) goto save_raw;    /* 太短，兜底 */
 
-    /* 复制 payload 到 MqttRxBuf（跳过 MQTT 头部，直接存原始字节）*/
-    start = ipd;
-    while (*ipd) {
-        if (pMqttRxBuf >= CMD_BUF_SIZE - 1) {
-            /* 缓冲区满，清空重来 */
-            memset(MqttRxBuf, 0, CMD_BUF_SIZE);
-            pMqttRxBuf = 0;
-            break;
+    /* 解析 MQTT 头部以跳过它，只保留 JSON payload */
+    {
+        int qos, has_pkt_id;
+        hdr_end = 1;                /* type 之后 */
+
+        /* QoS: 取自首字节 bit1-2; QoS>0 时 MQTT PUBLISH 有 2 字节 Packet ID */
+        qos = (ipd[0] >> 1) & 0x03;
+        has_pkt_id = (qos > 0) ? 2 : 0;
+
+        /* 跳过 remaining length 变长编码 */
+        while (hdr_end < data_len && (ipd[hdr_end] & 0x80)) hdr_end++;
+        hdr_end++;                      /* 最后一个字节 */
+
+        /* topic length 紧跟剩余长度之后（2 字节大端） */
+        if (hdr_end + 2 > data_len) goto save_raw;
+        topic_len = ((unsigned char)ipd[hdr_end] << 8) | (unsigned char)ipd[hdr_end + 1];
+        if (topic_len <= 0 || topic_len > data_len) goto save_raw;
+
+        /* 保存 topic（DISPENSE_X 命令标识在 topic 里，不在 payload 里） */
+        {
+            int tl_save = topic_len < 255 ? topic_len : 255;
+            memcpy(MqttTopicBuf, ipd + hdr_end + 2, tl_save);
+            MqttTopicBuf[tl_save] = '\0';
         }
-        /* 遇到下一个 +IPD 或 CR/LF 就停 */
-        if (*ipd == '\r' || *ipd == '\n') {
-            ipd++;
-            continue;
-        }
-        if (*ipd == '+' && ipd > start &&
-            (*(ipd-1) == '\n' || *(ipd-1) == '\r')) {
-            /* 下一个 +IPD 开始 */
-            break;
-        }
-        MqttRxBuf[pMqttRxBuf++] = *ipd++;
+
+        /* payload = 跳过 头 + topic_len字段(2) + topic + packetID */
+        copy_start = hdr_end + 2 + topic_len + has_pkt_id;
+        if (copy_start >= data_len) goto save_raw;
     }
-    MqttRxBuf[pMqttRxBuf] = '\0';
 
+    copy_len = data_len - copy_start;
+    if (copy_len > CMD_BUF_SIZE - 1)
+        copy_len = CMD_BUF_SIZE - 1;
+
+    memcpy(MqttRxBuf, ipd + copy_start, copy_len);
+    MqttRxBuf[copy_len] = '\0';
+    pMqttRxBuf = copy_len;
+
+    goto clear_rx;
+
+save_raw:
+    /* 兜底：直接拷贝整个 MQTT 报文（包含二进制头），由 CheckCmd 搜索 */
+    copy_len = data_len;
+    if (copy_len > CMD_BUF_SIZE - 1)
+        copy_len = CMD_BUF_SIZE - 1;
+    memcpy(MqttRxBuf, ipd, copy_len);
+    MqttRxBuf[copy_len] = '\0';
+    pMqttRxBuf = copy_len;
+
+    /* 如果 topic 已成功解析，同样保存（DISPENSE 命令匹配需要 topic） */
+    if (topic_len > 0 && (hdr_end + 2 + topic_len) <= data_len) {
+        int tl_save = topic_len < 255 ? topic_len : 255;
+        memcpy(MqttTopicBuf, ipd + hdr_end + 2, tl_save);
+        MqttTopicBuf[tl_save] = '\0';
+    }
+
+clear_rx:
     /* 清除 Serial_RxPacket 中已提取的部分 */
     memset(Serial_RxPacket, 0, SERIAL_RX_SIZE);
     pRxPacket = 0;
@@ -256,10 +305,20 @@ int ESP8266_Init(void)
     NopDelayMs(500);
 
     /* 构建数据上传和命令接收 Topic */
-    sprintf(Topic_DataUp,  "$sys/%s/%s/thing/property/post", PRODUCT_ID, DEVICE_NAME);
-    sprintf(Topic_CmdDown, "$sys/%s/%s/thing/property/set",  PRODUCT_ID, DEVICE_NAME);
+    sprintf(Topic_DataUp,    "$sys/%s/%s/thing/property/post",  PRODUCT_ID, DEVICE_NAME);
+    sprintf(Topic_CmdDown,   "$sys/%s/%s/thing/property/set",   PRODUCT_ID, DEVICE_NAME);
+    /* 显式订阅 4 个 per-service topic（不用通配符 #，避免被 OneNET 拒绝） */
+    sprintf(Topic_SvcInvoke[0], "$sys/%s/%s/thing/service/DISPENSE_0/invoke", PRODUCT_ID, DEVICE_NAME);
+    sprintf(Topic_SvcInvoke[1], "$sys/%s/%s/thing/service/DISPENSE_2/invoke", PRODUCT_ID, DEVICE_NAME);
+    sprintf(Topic_SvcInvoke[2], "$sys/%s/%s/thing/service/DISPENSE_4/invoke", PRODUCT_ID, DEVICE_NAME);
+    sprintf(Topic_SvcInvoke[3], "$sys/%s/%s/thing/service/DISPENSE_6/invoke", PRODUCT_ID, DEVICE_NAME);
 
-    return 1;
+    /* 清空待回复的服务调用 */
+    SvcMsgId[0] = 0;
+    SvcSlot     = -1;
+
+	return 1;
+
 }
 
 int ESP8266_UploadData(const char* json)
@@ -322,13 +381,26 @@ int ESP8266_UploadData(const char* json)
 
     /* ---- MQTT SUBSCRIBE（连接成功后做一次）---- */
     if (mqtt_online && !sub_done) {
+        int svc_i;
+        int svc_ok;
         memset(Serial_RxPacket, 0, SERIAL_RX_SIZE); pRxPacket = 0;
-        if (mqtt_subscribe()) {
-            sub_done = 1;
-            memset(MqttRxBuf, 0, CMD_BUF_SIZE);
-            pMqttRxBuf = 0;
+
+        /* 1. 订阅属性设置 */
+        if (!mqtt_subscribe_topic(Topic_CmdDown)) goto sub_end;
+        NopDelayMs(200);
+
+        /* 2. 依次订阅 4 个 DISPENSE 服务调用 topic（不用通配符，确保 OneNET 接受）*/
+        svc_ok = 1;
+        for (svc_i = 0; svc_i < 4; svc_i++) {
+            if (!mqtt_subscribe_topic(Topic_SvcInvoke[svc_i]))
+                svc_ok = 0;
+            NopDelayMs(150);
         }
-        NopDelayMs(500);
+
+        /* 即使个别服务订阅失败也标记完成，避免反复重试清空缓冲区 */
+        sub_done = 1;
+    sub_end:
+        NopDelayMs(300);
     }
 
     /* PUBLISH */
@@ -342,35 +414,116 @@ int ESP8266_UploadData(const char* json)
     return ret;
 }
 
+/* ---- 从 JSON 中提取 "id" 字段值（用于服务调用异步回复）---- */
+static void extract_msg_id(const char* buf, char* out, int out_len)
+{
+    const char *p, *q;
+    /* 查找 "id":" */
+    p = buf;
+    while (*p) {
+        if (p[0] == '"' && p[1] == 'i' && p[2] == 'd' && p[3] == '"' && p[4] == ':') {
+            p += 5;
+            /* 跳过可能存在的空白 */
+            while (*p == ' ' || *p == '\t') p++;
+            if (*p == '"') {
+                p++;  /* 跳过开头的双引号 */
+                q = p;
+                while (*q && *q != '"' && (q - p) < (out_len - 1)) q++;
+                {
+                    int len = (int)(q - p);
+                    if (len > 0 && len < out_len) {
+                        memcpy(out, p, len);
+                        out[len] = '\0';
+                        return;
+                    }
+                }
+            }
+        }
+        p++;
+    }
+    /* 没找到 id 字段，置空 */
+    if (out_len > 0) out[0] = '\0';
+}
+
 int8_t ESP8266_CheckCmd(void)
 {
-    /* 先尝试从 MqttRxBuf 中提取 +IPD 数据 */
+    char* found = NULL;
+    int8_t slot = -1;
+
+    /* 先从 MqttRxBuf 中提取 +IPD 数据 */
     ESP8266_FeedCmdBuf();
 
-    /* 在 MqttRxBuf 中搜索出货命令 */
-    if (strstr((const char*)MqttRxBuf, "DISPENSE_0"))
-        { memset(MqttRxBuf, 0, CMD_BUF_SIZE); pMqttRxBuf = 0; return 0; }
-    if (strstr((const char*)MqttRxBuf, "DISPENSE_2"))
-        { memset(MqttRxBuf, 0, CMD_BUF_SIZE); pMqttRxBuf = 0; return 2; }
-    if (strstr((const char*)MqttRxBuf, "DISPENSE_4"))
-        { memset(MqttRxBuf, 0, CMD_BUF_SIZE); pMqttRxBuf = 0; return 4; }
-    if (strstr((const char*)MqttRxBuf, "DISPENSE_6"))
-        { memset(MqttRxBuf, 0, CMD_BUF_SIZE); pMqttRxBuf = 0; return 6; }
+    /* 在 Topic 中搜索出货命令（DISPENSE_X 在 MQTT topic 里，不在 payload 里） */
+    if      (strstr((const char*)MqttTopicBuf, "DISPENSE_0")) { found = MqttTopicBuf; slot = 0; }
+    else if (strstr((const char*)MqttTopicBuf, "DISPENSE_2")) { found = MqttTopicBuf; slot = 2; }
+    else if (strstr((const char*)MqttTopicBuf, "DISPENSE_4")) { found = MqttTopicBuf; slot = 4; }
+    else if (strstr((const char*)MqttTopicBuf, "DISPENSE_6")) { found = MqttTopicBuf; slot = 6; }
 
-    /* 也搜一下 Serial_RxPacket（兜底，防止 +IPD 提取遗漏） */
-    if (strstr((const char*)Serial_RxPacket, "DISPENSE_0"))
-        { memset(Serial_RxPacket, 0, SERIAL_RX_SIZE); pRxPacket = 0; return 0; }
-    if (strstr((const char*)Serial_RxPacket, "DISPENSE_2"))
-        { memset(Serial_RxPacket, 0, SERIAL_RX_SIZE); pRxPacket = 0; return 2; }
-    if (strstr((const char*)Serial_RxPacket, "DISPENSE_4"))
-        { memset(Serial_RxPacket, 0, SERIAL_RX_SIZE); pRxPacket = 0; return 4; }
-    if (strstr((const char*)Serial_RxPacket, "DISPENSE_6"))
-        { memset(Serial_RxPacket, 0, SERIAL_RX_SIZE); pRxPacket = 0; return 6; }
+    if (found) {
+        /* 从 JSON payload 中提取 msgId，用于服务回复 */
+        extract_msg_id((const char*)MqttRxBuf, SvcMsgId, sizeof(SvcMsgId));
+        SvcSlot = slot;
+        memset(MqttRxBuf, 0, CMD_BUF_SIZE); pMqttRxBuf = 0;
+        memset(MqttTopicBuf, 0, sizeof(MqttTopicBuf));
+        return slot;
+    }
+
+    /* 兜底：搜 Serial_RxPacket */
+    {
+        char* buf = (char*)Serial_RxPacket;
+        found = NULL;
+        slot  = -1;
+        if      (strstr((const char*)buf, "DISPENSE_0")) { found = buf; slot = 0; }
+        else if (strstr((const char*)buf, "DISPENSE_2")) { found = buf; slot = 2; }
+        else if (strstr((const char*)buf, "DISPENSE_4")) { found = buf; slot = 4; }
+        else if (strstr((const char*)buf, "DISPENSE_6")) { found = buf; slot = 6; }
+
+        if (found) {
+            extract_msg_id((const char*)Serial_RxPacket, SvcMsgId, sizeof(SvcMsgId));
+            SvcSlot = slot;
+            memset(Serial_RxPacket, 0, SERIAL_RX_SIZE); pRxPacket = 0;
+            memset(MqttTopicBuf, 0, sizeof(MqttTopicBuf));
+            return slot;
+        }
+    }
 
     return -1;
 }
 
-/* 解析 SET_X_N 命令：云端改写库存，返回商品索引(0-14)，-1 无命令 */
+
+/* ---- 服务调用异步回复 ---- */
+void ESP8266_ServiceReply(int code)
+{
+    char json[256];
+    char reply_topic[128];
+
+    if (SvcMsgId[0] == '\0') return;  /* 没有待回复的服务调用 */
+    if (SvcSlot < 0)           return;  /* 没有记录货道号 */
+
+    sprintf(json,
+        "{\"id\":\"%s\",\"code\":%d,\"msg\":\"%s\"}",
+        SvcMsgId,
+        code,
+        (code == 0) ? "ok" : "sold out");
+
+    /* 按 OneNET 物模型 per-service 格式构造回复 topic:
+       $sys/{pid}/{device-name}/thing/service/{identifier}/invoke_reply */
+    sprintf(reply_topic, "$sys/%s/%s/thing/service/DISPENSE_%d/invoke_reply",
+            PRODUCT_ID, DEVICE_NAME, (int)SvcSlot);
+
+    mqtt_publish(reply_topic, json);
+
+    /* 回复完成，清除 */
+    SvcMsgId[0] = '\0';
+    SvcSlot     = -1;
+}
+
+void ESP8266_ClearPendingSvc(void)
+{
+    SvcMsgId[0] = '\0';
+    SvcSlot     = -1;
+}
+
 int8_t ESP8266_ParseInventory(u8* qty_out)
 {
     char* p;

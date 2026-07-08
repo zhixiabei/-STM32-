@@ -43,6 +43,11 @@ build_output.txt
 **/secret.h
 **/secret.js
 
+# ==================== Python ====================
+__pycache__/
+*.pyc
+*.pyo
+
 # ==================== 系统垃圾文件 ====================
 .DS_Store
 Thumbs.db

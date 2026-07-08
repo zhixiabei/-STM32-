@@ -66,6 +66,7 @@ int main(void)
     int8_t  prev    = -1;   /* 上一页，用于判断刷新 */
     int8_t  sel     = 0;    /* 当前选中商品索引 (0,2,4,6,8,10,12,14) */
     int8_t  cnt     = 0;    /* 购买数量 */
+    int8_t  remote  = 0;    /* 0=本地按键出货 1=云端远程出货（需回复服务调用） */
     u8      i;
     u16     tick = 0;
     char    buf[32], json[320];
@@ -130,8 +131,17 @@ int main(void)
                     if (inventory[cmd] > 0) {
                         sel = cmd;
                         cnt = 1;
-                        page = 4;           /* 遥控出货 */
+                        remote = 1;             /* 遥控出货，需回报结果 */
+                        page = 4;
+                    } else {
+                        /* 库存为零，回复服务调用失败 */
+                        ESP8266_ServiceReply(1);
                     }
+                }
+                else
+                {
+                    /* 设备忙，无法处理，清除待回复 ID */
+                    ESP8266_ClearPendingSvc();
                 }
             }
             else
@@ -218,10 +228,20 @@ int main(void)
                 OLED_ShowString(0,  0, "Dispensing...", 16, 1);
                 OLED_Refresh();
 
-                Mortor_Turn();
+                /* 1. 先扣库存 + 持久化（业务逻辑不应依赖硬件） */
                 inventory[sel] -= cnt;
-                LED_UpdateAll(inventory);   /* 出货后刷新 LED */
-                save_inventory();           /* 持久化到 Flash */
+                LED_UpdateAll(inventory);
+                save_inventory();
+                upload = 1;              /* 立即上传最新库存到 OneNET */
+
+                /* 2. 云端远程出货（暂不回复服务调用，避免 tcp_send 干扰 MQTT 上传链路） */
+                if (remote) {
+                    /* ESP8266_ServiceReply(0);  —— 暂屏蔽，防止破坏 MQTT 连接 */
+                    remote = 0;
+                }
+
+                /* 3. 最后转动电机（硬件动作，放最后不影响业务逻辑） */
+                Mortor_Turn();
 
                 page = 0;
                 sel  = 0;
