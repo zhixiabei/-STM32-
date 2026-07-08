@@ -17,14 +17,14 @@ static void NopDelayMs(volatile u32 ms)
     while (ms--) { volatile u32 n = 2000; while (n--) __NOP(); }
 }
 
-const char* WIFI_SSID     = WIFI_SSID;
-const char* WIFI_PASSWORD = WIFI_PASSWORD;
+const char* WIFI_SSID     = SECRET_WIFI_SSID;
+const char* WIFI_PASSWORD = SECRET_WIFI_PASSWORD;
 
 const char* MQTT_BROKER = "mqtts.heclouds.com";
 const int   MQTT_PORT   = 8883;
-const char* PRODUCT_ID  = ONENET_PRODUCT_ID;
-const char* DEVICE_NAME = ONENET_DEVICE_NAME;
-const char* MQTT_PASS   = ONENET_MQTT_PASS;
+const char* PRODUCT_ID  = SECRET_ONENET_PRODUCT_ID;
+const char* DEVICE_NAME = SECRET_ONENET_DEVICE_NAME;
+const char* MQTT_PASS   = SECRET_ONENET_MQTT_PASS;
 
 static char Topic_DataUp[128];
 static char Topic_CmdDown[128];       /* 订阅：接收云端命令 */
