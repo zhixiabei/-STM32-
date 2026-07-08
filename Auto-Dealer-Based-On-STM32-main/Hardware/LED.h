@@ -20,6 +20,7 @@ void LED7_OFF(void);
 void LED1_Turn(void);
 void LED2_Turn(void);
 void LED_APPSwitch(void);
+void LED_UpdateAll(u8 *inventory);
 void Mortor_Init(void);
 void Mortor_Turn(void);
 
